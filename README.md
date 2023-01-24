@@ -11,3 +11,12 @@
         3. Number of cities in the voivodeship
 
 You can see the result [here](https://tomek7667.github.io/Data-visualization-final-project/)
+
+---
+
+## Run
+
+1. `pip3 install -r requirements.txt`
+2. `python3 app.py`
+
+It will create `map.html` file in the root directory. Open it in your browser.

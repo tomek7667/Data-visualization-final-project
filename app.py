@@ -2,7 +2,9 @@ import requests
 import json
 import os
 import folium
-import random
+import kmeans1d
+import wikipediaapi
+import re
 
 voivodeships = ['dolnośląskie', 'kujawsko-pomorskie', 'lubelskie', 'lubuskie', 'łódzkie',
 				'małopolskie', 'mazowieckie', 'opolskie', 'podkarpackie', 'podlaskie', 'pomorskie', 
@@ -37,7 +39,7 @@ def load_population(geometry_data):
 	use_cache = os.path.exists('population.json')
 	if use_cache:
 		with open('population.json', 'r') as f:
-			data = json.load(f)
+			data = json.loads(f)
 		return data
 	else:
 		with open('population.json', 'w') as f:
@@ -69,16 +71,25 @@ with open('merged.json', 'w') as f:
 	f.write(json.dumps(merged))
 print("[+] Merged data saved!")
 
-# Coloring with random seed - in order to keep the colors per voivodeship consistent
-colors = ['red', 'blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 'darkblue', 'darkgreen', 'cadetblue', 'darkpurple', 'pink', 'lightgreen', 'gray', 'black', 'crimson']
-random.seed(42)
+populations_array = [merged[voivodeship]['population'] for voivodeship in merged]
+number_of_clusters = 9
+
+clusters, centroids = kmeans1d.cluster(populations_array, number_of_clusters)
 for voivodeship in merged:
-	merged[voivodeship]['color'] = random.choice(colors)
-	colors.remove(merged[voivodeship]['color'])
+	merged[voivodeship]['cluster'] = clusters[voivodeships.index(voivodeship)]
+	merged[voivodeship]['centroid'] = centroids[merged[voivodeship]['cluster']]
+
+colors = {}
+j = 0
+for i in range(0xff, 0, -(0xff // number_of_clusters)):
+	colors[j] = f"#{hex(i)[2:]}0000"
+	j += 1
+
+for voivodeship in merged:
+	merged[voivodeship]['color'] = colors[merged[voivodeship]['cluster']]
+
 
 # Apply number of cities using wikipediaapi and regex scraping
-import wikipediaapi
-import re
 wiki_wiki = wikipediaapi.Wikipedia('pl')
 use_cache = os.path.exists('cities.json')
 if use_cache:
@@ -104,30 +115,25 @@ else:
 		merged[v]['cities_number'] = cities_number
 	with open('cities.json', 'w') as f:
 		f.write(json.dumps(merged))
-	
-# Load the data:
-population = []
+
 m = folium.Map(location=[52.0, 19.0], zoom_start=6)
-coordinates = []
 for voivodeship in merged:
 	coordinates = [(coord[1], coord[0]) for coord in merged[voivodeship]['coordinates'][0]]
 	voivodeship_population = merged[voivodeship]['population']
 	color = merged[voivodeship]['color']
 	cities_number = merged[voivodeship]['cities_number']
-	popup = folium.Popup(f'Voivodeship name: <b>{voivodeship}</b><br>Population: <b>{voivodeship_population}</b><br>Number of cities in the voivodeship: <b>{cities_number}</b>', max_width=500)
+	centroid_value = merged[voivodeship]['centroid']
+	cluster_number = merged[voivodeship]['cluster']
+	popup = folium.Popup(f'Voivodeship name: <b>{voivodeship}</b><br>Population: <b>{voivodeship_population}</b><br>Number of cities in the voivodeship: <b>{cities_number}</b><br>Centroid value: <b>{centroid_value}</b><br>Cluster number: <b>{cluster_number}</b>', max_width=500)
 	folium.Polygon(
 		coordinates,
 		popup=popup,
 		tooltip=voivodeship,
-		color='gray',
+		color=color,
 		fill=True,
 		fill_color=color
 	).add_to(m)
 
 print("[+] Map created!")
 
-
-
-
 m.save('map.html')
-
